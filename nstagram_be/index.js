@@ -1,45 +1,50 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const redis = require('redis');
+const multer = require('multer');
+const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
 
-// Create an Express app
 const app = express();
+const upload = multer({ dest: 'uploads/' });
 
-// Middleware to parse JSON bodies
-app.use(bodyParser.json());
+// Dummy smart contract interaction
+async function mintNFT(filePath, userId) {
+  // Set up your provider and wallet (this is a simplified example)
+  const provider = new ethers.providers.JsonRpcProvider('https://your_rpc_provider_url');
+  const wallet = new ethers.Wallet('your_private_key', provider);
 
-// Create a Redis client
-const redisClient = redis.createClient({
-    host: '127.0.0.1', // Redis server hostname
-    port: 6379        // Redis server port
+  // Smart contract interaction
+  const contractAddress = 'your_smart_contract_address';
+  const abi = [ /* Your contract ABI */ ];
+  const contract = new ethers.Contract(contractAddress, abi, wallet);
+
+  // Minting logic (simplified)
+  const tx = await contract.mintNFT(userId, filePath);
+  await tx.wait();
+
+  console.log('NFT minted:', tx);
+}
+
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const userId = req.body.userId;
+
+    // Move file to a permanent location if necessary
+    const permanentPath = path.join(__dirname, 'uploads', file.originalname);
+    fs.renameSync(file.path, permanentPath);
+
+    // Mint NFT with the file path and user ID
+    await mintNFT(permanentPath, userId);
+
+    res.status(200).send('File uploaded and NFT minted successfully!');
+  } catch (error) {
+    console.error('Error handling file upload:', error);
+    res.status(500).send('Failed to upload file and mint NFT.');
+  }
 });
 
-redisClient.on('error', (err) => {
-    console.error('Error connecting to Redis:', err);
-});
-
-// Endpoint to receive NFC data
-app.post('/nfcdata', (req, res) => {
-    const nfcData = req.body.data;
-    console.log('Received NFC Data:', nfcData);
-    
-    // Save nfcData to Redis with a unique key (e.g., timestamp)
-    const key = `nfcdata:${Date.now()}`;
-    redisClient.set(key, nfcData, (err, reply) => {
-        if (err) {
-            console.error('Error saving data to Redis:', err);
-            return res.sendStatus(500);
-        }
-        console.log('Data saved to Redis:', reply);
-        res.sendStatus(200);
-    });
-});
-app.get("/healthcheck", (req, res) => {
-    const status = 200; 
-    res.status(status).send(`Healthy: ${status}`);
-});
-
-const PORT = 3000;
+const PORT = 5000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
